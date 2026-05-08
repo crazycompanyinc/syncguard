@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "syncguard"
+version = "0.1.0"
+description = "Implicit invariance drift detector for multi-agent codebases"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "SyncGuard" }]
+dependencies = [
+  "click>=8.1",
+  "fastapi>=0.110",
+  "httpx>=0.27",
+  "uvicorn>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+syncguard = "syncguard.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["syncguard*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
