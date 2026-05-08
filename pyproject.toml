@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "syncguard"
-version = "0.1.0"
-description = "Implicit invariance drift detector for multi-agent codebases"
+version = "2.0.0"
+description = "Production-grade invariant drift detector for multi-service codebases"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "SyncGuard" }]

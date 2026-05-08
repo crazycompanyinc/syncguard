@@ -10,7 +10,7 @@ from syncguard.server.routes import build_router
 
 
 def create_app(root: str | Path = ".") -> FastAPI:
-    app = FastAPI(title="SyncGuard", version="0.1.0")
+    app = FastAPI(title="SyncGuard", version="2.0.0")
     app.include_router(build_router(root))
     return app
 

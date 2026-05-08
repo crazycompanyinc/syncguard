@@ -13,6 +13,11 @@ InvariantType = Literal[
     "convention",
     "behavioral",
     "type_contract",
+    "schema_evolution",
+    "api_contract",
+    "database_schema",
+    "configuration",
+    "test_inferred",
 ]
 Severity = Literal["low", "medium", "high", "critical"]
 DriftType = Literal["new_violation", "worsening", "accumulated"]

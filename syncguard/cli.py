@@ -16,6 +16,17 @@ from syncguard.detector.detector import DriftDetector
 from syncguard.extractor.extractor import InvariantExtractor
 from syncguard.ledger.ledger import DriftLedger
 from syncguard.server.app import create_app
+from syncguard.v2 import (
+    APIContractMonitor,
+    ConfigurationDriftTracker,
+    DebtQuantifier,
+    InvariantGraphVisualizer,
+    SchemaEvolutionTracker,
+    SemVerEnforcer,
+    TeamDriftReporter,
+    TestInvariantMiner,
+)
+from syncguard.v2.api_contracts import APIContract
 
 
 @click.group()
@@ -113,6 +124,23 @@ def predict() -> None:
         click.echo(line)
 
 
+@main.command(name="team-report")
+def team_report() -> None:
+    """Show drift debt grouped by team ownership."""
+    db = SyncGuardDB(".")
+    ownership = {"api/": "Team Alpha", "services/": "Team Beta", "migrations/": "Platform"}
+    reports = TeamDriftReporter().build(db.list_drifts(), ownership)
+    for report in reports:
+        click.echo(f"{report.team}: incidents={report.incidents} hours={report.estimated_hours:.1f} dollars=${report.estimated_dollars:.2f}")
+
+
+@main.command(name="graph")
+def graph() -> None:
+    """Print the invariant graph as Graphviz DOT."""
+    db = SyncGuardDB(".")
+    click.echo(InvariantGraphVisualizer().to_dot(db.list_invariants(), db.list_drifts()))
+
+
 @main.command()
 @click.option("--port", default=8000, show_default=True, help="Port for the API server.")
 def serve(port: int) -> None:
@@ -153,6 +181,40 @@ def demo() -> None:
         click.echo("Predictions")
         for line in DriftLedger().predictions(debt_entries):
             click.echo(line)
+
+        click.echo("")
+        click.echo("v2 contract monitoring")
+        schemas = SchemaEvolutionTracker()
+        old_user = schemas.infer_from_sample("UserResponse", "1.2.0", {"id": "u1", "email": "a@example.com"})
+        new_user = schemas.infer_from_sample("UserResponse", "1.3.0", {"id": 1, "email": "a@example.com", "plan": "pro"})
+        schema_changes = schemas.compare(old_user, new_user)
+        for change in schema_changes:
+            click.echo(f"{change.path}: {change.change_type} breaking={change.breaking}")
+
+        old_api = APIContract("users", "/users/{id}", "GET", "1.2.0", old_user, schemas.infer_from_sample("Error", "1.0.0", {"error": "missing"}), True)
+        new_api = APIContract("users", "/users/{id}", "GET", "1.3.0", new_user, schemas.infer_from_sample("Error", "1.0.0", {"message": "missing"}), False)
+        for drift in APIContractMonitor().compare(old_api, new_api):
+            click.echo(f"{drift.contract_key} {drift.area}: {drift.message} breaking={drift.breaking}")
+
+        semver = SemVerEnforcer().validate("1.2.0", "1.3.0", schema_changes)
+        click.echo(f"Semver: {semver.reason} valid={semver.valid}")
+
+        config_drifts = ConfigurationDriftTracker().compare({"staging": {"feature_flag": False}, "production": {"feature_flag": True}}, {"feature_flag"})
+        for drift in config_drifts:
+            click.echo(f"Config: {drift.key} {drift.environments} severity={drift.severity}")
+
+        test_invariants = TestInvariantMiner().mine(root)
+        click.echo(f"Test-inferred invariants: {len(test_invariants)}")
+
+        debt_total = DebtQuantifier().total(incidents)
+        click.echo(f"Debt estimate: {debt_total.hours:.1f}h ${debt_total.dollars:.2f}")
+
+        reports = TeamDriftReporter().build(incidents, {"api/": "Team Alpha", "services/": "Team Beta", "migrations/": "Platform"})
+        for report in reports:
+            click.echo(f"Team: {report.team} incidents={report.incidents} dollars=${report.estimated_dollars:.2f}")
+
+        graph_lines = InvariantGraphVisualizer().to_dot(invariants, incidents).splitlines()
+        click.echo(f"Invariant graph: {len(graph_lines)} DOT lines")
 
 
 def _record_and_print_drifts(db: SyncGuardDB, incidents: list[DriftIncident]) -> None:
@@ -206,6 +268,14 @@ def _create_demo_project(root: Path) -> None:
     (root / "migrations" / "001_create_users.py").write_text(
         "def up():\n    create_table = True\n    return create_table\n\n"
         "def down():\n    drop_table = True\n    return drop_table\n",
+        encoding="utf-8",
+    )
+    (root / "tests").mkdir(parents=True, exist_ok=True)
+    (root / "tests" / "test_api.py").write_text(
+        "def test_user_response_contract():\n"
+        "    response = {'data': {'id': 'u1'}, 'meta': {}, 'links': {}}\n"
+        "    assert 'data' in response\n"
+        "    assert response['meta'] == {}\n",
         encoding="utf-8",
     )
 
